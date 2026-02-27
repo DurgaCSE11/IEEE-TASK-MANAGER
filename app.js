@@ -4,7 +4,9 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
-    onAuthStateChanged
+    onAuthStateChanged,
+    GoogleAuthProvider,
+    signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
     getFirestore,
@@ -39,6 +41,7 @@ const firebaseConfig = {
 // ==========================================
 let app, db, auth;
 let currentUser = null; // { email, role, name, uid }
+let pendingGoogleUser = null; // Temporary hold for new Google Sign-Ins without a role
 let unsubscribeTasks = null;
 
 // DOM Elements
@@ -169,6 +172,102 @@ function toggleAuthMode(e) {
     }
 
     document.getElementById('toggle-auth-mode').addEventListener('click', toggleAuthMode);
+}
+
+async function handleGoogleSignIn(e) {
+    if (e) e.preventDefault();
+
+    const submitBtn = document.getElementById('google-signin-btn');
+    const originalContent = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Connecting...</span>';
+    submitBtn.disabled = true;
+
+    try {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+
+        // Check if user exists in our Firestore 'users' collection
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+
+        let userRole = 'member';
+        let userName = user.displayName || 'Unknown User';
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            userRole = userData.role || 'member';
+            userName = userData.name || userName;
+
+            // User exists, login immediately
+            loginUser({
+                uid: user.uid,
+                email: user.email,
+                role: userRole,
+                name: userName
+            });
+            showToast("Logged in with Google successfully!", "success");
+        } else {
+            // First time Google Login - Show Role Selection Modal
+            pendingGoogleUser = {
+                uid: user.uid,
+                email: user.email,
+                name: userName
+            };
+            document.getElementById('role-modal').classList.remove('hidden');
+        }
+
+    } catch (error) {
+        console.error("Google Auth error:", error);
+        if (error.code !== 'auth/popup-closed-by-user') {
+            showToast("Google Sign-In failed.", "error");
+        }
+    } finally {
+        submitBtn.innerHTML = originalContent;
+        submitBtn.disabled = false;
+    }
+}
+
+async function handleConfirmGoogleRole(e) {
+    if (e) e.preventDefault();
+    if (!pendingGoogleUser) return;
+
+    const roleInput = document.querySelector('input[name="google-role"]:checked');
+    if (!roleInput) {
+        return showToast("Please select a role", "error");
+    }
+
+    const role = roleInput.value;
+    const btn = document.getElementById('confirm-role-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+
+    try {
+        await setDoc(doc(db, "users", pendingGoogleUser.uid), {
+            email: pendingGoogleUser.email,
+            name: pendingGoogleUser.name,
+            role: role,
+            createdAt: serverTimestamp()
+        });
+
+        document.getElementById('role-modal').classList.add('hidden');
+
+        loginUser({
+            uid: pendingGoogleUser.uid,
+            email: pendingGoogleUser.email,
+            role: role,
+            name: pendingGoogleUser.name
+        });
+
+        showToast("Account created successfully!", "success");
+    } catch (error) {
+        console.error("Error setting role: ", error);
+        showToast("Failed to save role.", "error");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        pendingGoogleUser = null;
+    }
 }
 
 async function handleAuthSubmit(e) {
@@ -481,6 +580,8 @@ function renderMemberTasks(tasks) {
 
 function setupEventListeners() {
     document.getElementById('auth-form').addEventListener('submit', handleAuthSubmit);
+    document.getElementById('google-signin-btn').addEventListener('click', handleGoogleSignIn);
+    document.getElementById('confirm-role-btn').addEventListener('click', handleConfirmGoogleRole);
     document.getElementById('toggle-auth-mode').addEventListener('click', toggleAuthMode);
     document.getElementById('create-task-form').addEventListener('submit', createTask);
 
@@ -506,4 +607,3 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
-
