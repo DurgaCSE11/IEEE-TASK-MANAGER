@@ -1,5 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
     getFirestore,
     collection,
     addDoc,
@@ -7,6 +14,8 @@ import {
     where,
     onSnapshot,
     doc,
+    setDoc,
+    getDoc,
     updateDoc,
     orderBy,
     serverTimestamp
@@ -14,7 +23,6 @@ import {
 
 // ==========================================
 // 1. FIREBASE CONFIGURATION
-// Replace this with your actual Firebase config
 // ==========================================
 const firebaseConfig = {
     apiKey: "AIzaSyCf_P3NS3AKe__zrJhdXzYJzQn-IZ2ibBY",
@@ -25,11 +33,12 @@ const firebaseConfig = {
     appId: "1:764942735404:web:bc43f89a215c5ae73fd989",
     measurementId: "G-SXY13KTE8R"
 };
+
 // ==========================================
 // 2. STATE MANAGEMENT 
 // ==========================================
-let app, db;
-let currentUser = null; // { email, role }
+let app, db, auth;
+let currentUser = null; // { email, role, name, uid }
 let unsubscribeTasks = null;
 
 // DOM Elements
@@ -39,47 +48,49 @@ const views = {
     member: document.getElementById('member-dashboard')
 };
 
+// Current Auth Mode ('login' or 'register')
+let currentAuthMode = 'login';
+
 // ==========================================
 // 3. INITIALIZATION & UTILS
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        // Initialize Firebase only if placeholder is updated or we want to try anyway
-        // For the demo, we'll try to initialize, but catch errors if config is invalid
-        app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        console.log("Firebase initialized successfully.");
-    } catch (error) {
-        console.warn("Firebase initialization failed. Make sure to update your config in app.js.", error);
-        showToast("Using mocked data mode (Firebase not configured)", "warning");
-        // We'll proceed in a simulated mode if Firebase isn't configured for demo purposes.
-        mockMode = true;
-    }
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    console.log("Firebase initialized successfully.");
+
+    // Listen for auth state changes to persist sessions
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // Only auto-login if they aren't already set up in UI (e.g., page reload)
+            if (!currentUser) {
+                try {
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        loginUser({
+                            uid: user.uid,
+                            email: user.email,
+                            role: userData.role,
+                            name: userData.name
+                        });
+                    }
+                } catch (err) {
+                    console.error("Error fetching user session data:", err);
+                }
+            }
+        }
+    });
 
     setupEventListeners();
 });
-
-let mockMode = false;
-let mockTasks = []; // Used if Firebase isn't configured
-
-// Mock Users Store
-// To simulate a real database for the demo, we'll store registered users here.
-// In a real app with Firebase Auth, you would use createUserWithEmailAndPassword.
-let mockUsers = [
-    { email: 'coord@ieee.org', password: '12', role: 'coordinator', name: 'Admin Coordinator' },
-    { email: 'member@ieee.org', password: '12', role: 'member', name: 'Test Member' }
-];
-
-// Current Auth Mode ('login' or 'register')
-let currentAuthMode = 'login';
 
 function showToast(message, type = "success") {
     const toast = document.getElementById('toast');
     const msgEl = document.getElementById('toast-message');
 
     msgEl.textContent = message;
-
-    // Clear previous classes
     toast.className = 'toast';
 
     if (type === 'error') {
@@ -128,7 +139,6 @@ function switchView(viewName) {
 // ==========================================
 // 4. AUTHENTICATION (Login / Register)
 // ==========================================
-
 function toggleAuthMode(e) {
     if (e) e.preventDefault();
     const title = document.getElementById('auth-title');
@@ -139,76 +149,99 @@ function toggleAuthMode(e) {
     const roleGroup = document.getElementById('role-group');
 
     if (currentAuthMode === 'login') {
-        // Switch to Register
         currentAuthMode = 'register';
         title.textContent = 'Join IEEE Tracker';
         subtitle.textContent = 'Create your account to get started.';
         submitBtn.innerHTML = '<span>Register</span><i class="fa-solid fa-user-plus"></i>';
         toggleText.innerHTML = 'Already have an account? <a href="#" id="toggle-auth-mode">Login here</a>';
         nameGroup.style.display = 'flex';
-        roleGroup.style.display = 'grid'; // Ensure role selector shows
+        roleGroup.style.display = 'grid';
         document.getElementById('name').setAttribute('required', 'true');
     } else {
-        // Switch to Login
         currentAuthMode = 'login';
         title.textContent = 'IEEE Task Tracker';
         subtitle.textContent = 'Welcome! Please log in to continue.';
         submitBtn.innerHTML = '<span>Login</span><i class="fa-solid fa-arrow-right"></i>';
         toggleText.innerHTML = 'Don\'t have an account? <a href="#" id="toggle-auth-mode">Register here</a>';
         nameGroup.style.display = 'none';
-        roleGroup.style.display = 'none'; // Hide role selector on login
+        roleGroup.style.display = 'none';
         document.getElementById('name').removeAttribute('required');
     }
 
-    // Reattach listener to the newly rendered link
     document.getElementById('toggle-auth-mode').addEventListener('click', toggleAuthMode);
 }
 
-function handleAuthSubmit(e) {
+async function handleAuthSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('email').value.trim().toLowerCase();
     const password = document.getElementById('password').value;
 
     if (!email || !password) return showToast("Please fill all required fields", "error");
 
-    if (currentAuthMode === 'register') {
-        const name = document.getElementById('name').value.trim();
-        const role = document.querySelector('input[name="role"]:checked').value;
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span>Processing...</span><i class="fa-solid fa-spinner fa-spin"></i>';
+    submitBtn.disabled = true;
 
-        if (!name) return showToast("Please enter your name", "error");
+    try {
+        if (currentAuthMode === 'register') {
+            const name = document.getElementById('name').value.trim();
+            const role = document.querySelector('input[name="role"]:checked').value;
 
-        // Check if user already exists
-        if (mockUsers.some(u => u.email === email)) {
-            return showToast("Account with this email already exists", "error");
-        }
+            if (!name) throw new Error("Please enter your name");
 
-        // Register user
-        const newUser = { email, password, role, name };
-        mockUsers.push(newUser);
+            // Register user in Firebase Auth
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
 
-        // Auto-login after registration
-        loginUser(newUser);
-        showToast("Registration successful! Welcome.", "success");
+            // Save additional user info (role, name) to Firestore 'users' collection
+            await setDoc(doc(db, "users", user.uid), {
+                email: user.email,
+                name: name,
+                role: role,
+                createdAt: serverTimestamp()
+            });
 
-    } else {
-        // Login logic
-        const user = mockUsers.find(u => u.email === email && u.password === password);
+            loginUser({ uid: user.uid, email: user.email, role, name });
+            showToast("Registration successful! Welcome.", "success");
 
-        if (user) {
-            loginUser(user);
-            showToast(`Logged in successfully!`, "success");
         } else {
-            showToast("Invalid email or password", "error");
+            // Login user with Firebase Auth
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+            // Check their role from Firestore
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                loginUser({
+                    uid: userCredential.user.uid,
+                    email: userCredential.user.email,
+                    role: userData.role,
+                    name: userData.name
+                });
+                showToast(`Logged in successfully!`, "success");
+            } else {
+                showToast("User profile not found. Please contact an admin.", "error");
+            }
         }
+    } catch (error) {
+        console.error("Auth error:", error);
+        let errMsg = error.message;
+        if (error.code === 'auth/email-already-in-use') errMsg = "Account with this email already exists";
+        if (error.code === 'auth/invalid-credential') errMsg = "Invalid email or password";
+        if (error.code === 'auth/weak-password') errMsg = "Password should be at least 6 characters";
+        showToast(errMsg, "error");
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
     }
 }
 
 function loginUser(user) {
     currentUser = user;
 
-    // Reset form and switch back to default login view for next logout
     document.getElementById('auth-form').reset();
-    if (currentAuthMode === 'register') toggleAuthMode(); // switch back to login mode visually
+    if (currentAuthMode === 'register') toggleAuthMode();
 
     if (user.role === 'coordinator') {
         document.getElementById('coord-user-email').textContent = user.name || user.email;
@@ -221,22 +254,26 @@ function loginUser(user) {
     }
 }
 
-function handleLogout() {
-    currentUser = null;
-    if (unsubscribeTasks) {
-        unsubscribeTasks();
-        unsubscribeTasks = null;
+async function handleLogout() {
+    try {
+        await signOut(auth);
+        currentUser = null;
+        if (unsubscribeTasks) {
+            unsubscribeTasks();
+            unsubscribeTasks = null;
+        }
+        document.getElementById('auth-form').reset();
+        switchView('auth');
+        showToast("Logged out successfully");
+    } catch (error) {
+        console.error("Logout error:", error);
+        showToast("Error logging out", "error");
     }
-    // Form is already reset in loginUser, but just to be safe
-    document.getElementById('auth-form').reset();
-    switchView('auth');
-    showToast("Logged out successfully");
 }
 
 // ==========================================
 // 5. DATABASE OPERATIONS
 // ==========================================
-
 async function createTask(e) {
     e.preventDefault();
 
@@ -254,42 +291,29 @@ async function createTask(e) {
         deadline,
         status: 'Pending',
         createdBy: currentUser.email,
-        createdAt: mockMode ? new Date().toISOString() : serverTimestamp()
+        createdAt: serverTimestamp()
     };
 
     try {
-        if (mockMode) {
-            newTask.id = Date.now().toString();
-            mockTasks.push(newTask);
-            renderCoordinatorTasks(mockTasks);
-        } else {
-            await addDoc(collection(db, "tasks"), newTask);
-        }
-
+        await addDoc(collection(db, "tasks"), newTask);
         document.getElementById('create-task-form').reset();
         showToast("Task assigned successfully");
-
     } catch (error) {
         console.error("Error adding task: ", error);
-        showToast("Error creating task", "error");
+        if (error.code === 'permission-denied') {
+            showToast("Missing permissions. Check Firestore rules.", "error");
+        } else {
+            showToast("Error creating task", "error");
+        }
     }
 }
 
 async function updateTaskStatus(taskId, newStatus) {
     try {
-        if (mockMode) {
-            const task = mockTasks.find(t => t.id === taskId);
-            if (task) {
-                task.status = newStatus;
-                if (currentUser.role === 'coordinator') renderCoordinatorTasks(mockTasks);
-                if (currentUser.role === 'member') renderMemberTasks(mockTasks.filter(t => t.assignedTo === currentUser.email));
-            }
-        } else {
-            const taskRef = doc(db, "tasks", taskId);
-            await updateDoc(taskRef, {
-                status: newStatus
-            });
-        }
+        const taskRef = doc(db, "tasks", taskId);
+        await updateDoc(taskRef, {
+            status: newStatus
+        });
         showToast(`Task marked as ${newStatus}`);
     } catch (error) {
         console.error("Error updating document: ", error);
@@ -300,13 +324,7 @@ async function updateTaskStatus(taskId, newStatus) {
 // ==========================================
 // 6. REAL-TIME LISTENERS & RENDERING
 // ==========================================
-
 function loadAllTasks() {
-    if (mockMode) {
-        renderCoordinatorTasks(mockTasks);
-        return;
-    }
-
     const q = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
 
     if (unsubscribeTasks) unsubscribeTasks();
@@ -319,32 +337,22 @@ function loadAllTasks() {
     }, (error) => {
         console.error("Error fetching tasks: ", error);
         if (error.code === 'failed-precondition') {
-            showToast("Index building. Tasks might be missing.", "warning");
+            showToast("Index not built yet. Tasks might be missing.", "warning");
         } else if (error.code === 'permission-denied') {
-            showToast("Missing Firebase permissions. Check DB Rules.", "error");
+            showToast("Access Denied. Ensure Firestore rules are public/setup.", "error");
         }
     });
 
-    // Add filter listener
-    document.getElementById('task-filter').addEventListener('change', (e) => {
-        const filterEl = e.target;
-        // In a real app we'd re-query, but here we'll just re-render current state for simplicity
-        // We'd store latest tasks in a variable
-    });
+    // We don't need a DB re-query for filter since it's client-side, 
+    // it's handled via the change listener re-triggering render.
 }
 
 function loadMemberTasks() {
-    if (mockMode) {
-        const myTasks = mockTasks.filter(t => t.assignedTo === currentUser.email);
-        renderMemberTasks(myTasks);
-        return;
-    }
-
+    // Note: To use orderBy with where, Firebase requires a Composite Index. 
+    // To keep this simple and avoid index errors for the user, we query `where` and sort client-side.
     const q = query(
         collection(db, "tasks"),
-        where("assignedTo", "==", currentUser.email),
-        // Note: Ordering by createdAt requires a composite index in Firestore when mixed with where()
-        // orderBy("createdAt", "desc") 
+        where("assignedTo", "==", currentUser.email)
     );
 
     if (unsubscribeTasks) unsubscribeTasks();
@@ -353,13 +361,20 @@ function loadMemberTasks() {
         snapshot.forEach((doc) => {
             tasks.push({ id: doc.id, ...doc.data() });
         });
-        // Sort manually to avoid index requirement for the user initially
+
+        // Manual client-side sorting by creation date
         tasks.sort((a, b) => {
             const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
             const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
+
         renderMemberTasks(tasks);
+    }, (error) => {
+        console.error("Error fetching member tasks:", error);
+        if (error.code === 'permission-denied') {
+            showToast("Access Denied. Ensure Firestore rules are public/setup.", "error");
+        }
     });
 }
 
@@ -369,7 +384,6 @@ function renderCoordinatorTasks(tasks) {
     const filterVal = document.getElementById('task-filter').value;
 
     // Calculate stats
-    let total = tasks.length;
     let pending = 0;
     let completed = 0;
 
@@ -383,7 +397,7 @@ function renderCoordinatorTasks(tasks) {
     });
 
     // Update Stats UI
-    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-total').textContent = tasks.length;
     document.getElementById('stat-pending').textContent = pending;
     document.getElementById('stat-completed').textContent = completed;
 
@@ -475,9 +489,8 @@ function setupEventListeners() {
     });
 
     document.getElementById('task-filter').addEventListener('change', () => {
-        // Re-trigger load to apply filter conceptually
         if (currentUser && currentUser.role === 'coordinator') {
-            loadAllTasks();
+            loadAllTasks(); // This could be optimized to just re-render, but a simple re-hook is okay for now.
         }
     });
 }
@@ -493,3 +506,4 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
