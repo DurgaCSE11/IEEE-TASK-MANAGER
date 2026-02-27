@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IEEE Assignment Tracking System</title>
+    <!-- Modern Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Background decorative elements -->
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="toast hidden">
+            <span id="toast-message">Message goes here</span>
+        </div>
+
+        <!-- Authentication View -->
+        <div id="auth-view" class="view active glass-panel">
+            <div class="org-logo-container">
+                <img src="vssut-logo.png" alt="VSSUT IEEE Logo" class="org-logo">
+            </div>
+            <div class="header-logo">
+                <h2 id="auth-title">IEEE Task Tracker</h2>
+            </div>
+            <p class="subtitle" id="auth-subtitle">Welcome! Please log in to continue.</p>
+
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="name@ieee.org">
+                </div>
+                <div class="form-group" id="name-group" style="display: none;">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="••••••••">
+                </div>
+                <!-- Role is only needed during registration, but we keep it here for both to simplify for now -->
+                <div class="form-group" id="role-group" style="display: none;">
+                    <label for="role">Register As</label>
+                    <div class="role-selector">
+                        <label class="radio-card">
+                            <input type="radio" name="role" value="coordinator" checked>
+                            <div class="card-content">
+                                <i class="fa-solid fa-user-tie"></i>
+                                <span>Coordinator</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="role" value="member">
+                            <div class="card-content">
+                                <i class="fa-solid fa-user"></i>
+                                <span>Member</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="auth-submit-btn">
+                    <span>Login</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+
+            <div class="auth-toggle">
+                <p id="auth-toggle-text">Don't have an account? <a href="#" id="toggle-auth-mode">Register here</a></p>
+            </div>
+        </div>
+
+        <!-- Coordinator Dashboard View -->
+        <div id="coordinator-dashboard" class="view hidden">
+            <nav class="navbar glass-panel">
+                <div class="nav-brand">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>Coordinator Dashboard</span>
+                </div>
+                <div class="nav-user">
+                    <span id="coord-user-email">coordinator@ieee.org</span>
+                    <button class="btn btn-icon logout-btn" title="Logout">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </nav>
+
+            <main class="dashboard-content">
+                <div class="dashboard-grid">
+                    <!-- Create Task Form -->
+                    <div class="glass-panel create-task-panel">
+                        <h3><i class="fa-solid fa-plus-circle"></i> Create New Task</h3>
+                        <form id="create-task-form">
+                            <div class="form-group">
+                                <label for="task-title">Task Title</label>
+                                <input type="text" id="task-title" required
+                                    placeholder="E.g. Setup event registration form">
+                            </div>
+                            <div class="form-group">
+                                <label for="task-assignee">Assign To (Email)</label>
+                                <input type="email" id="task-assignee" required placeholder="member@ieee.org">
+                            </div>
+                            <div class="form-group">
+                                <label for="task-deadline">Deadline</label>
+                                <input type="datetime-local" id="task-deadline" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Assign Task</button>
+                        </form>
+                    </div>
+
+                    <!-- Task Overview stats -->
+                    <div class="glass-panel stats-panel">
+                        <h3><i class="fa-solid fa-chart-pie"></i> Overview</h3>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <span class="stat-label">Total Assigned</span>
+                                <span class="stat-value" id="stat-total">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Pending</span>
+                                <span class="stat-value text-warning" id="stat-pending">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Completed</span>
+                                <span class="stat-value text-success" id="stat-completed">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Tasks List -->
+                <div class="glass-panel full-width tasks-list-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-list-check"></i> All Assigned Tasks</h3>
+                        <div class="filter-group">
+                            <select id="task-filter">
+                                <option value="all">All Tasks</option>
+                                <option value="pending">Pending</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="tasks-table">
+                            <thead>
+                                <tr>
+                                    <th>Task Title</th>
+                                    <th>Assigned To</th>
+                                    <th>Date Created</th>
+                                    <th>Deadline</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="all-tasks-body">
+                                <!-- Tasks rendered here via JS -->
+                            </tbody>
+                        </table>
+                        <div id="no-tasks-coord" class="empty-state hidden">
+                            <i class="fa-solid fa-folder-open"></i>
+                            <p>No tasks found.</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Member Dashboard View -->
+        <div id="member-dashboard" class="view hidden">
+            <nav class="navbar glass-panel">
+                <div class="nav-brand">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>Member Dashboard</span>
+                </div>
+                <div class="nav-user">
+                    <span id="member-user-email">member@ieee.org</span>
+                    <button class="btn btn-icon logout-btn" title="Logout">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </nav>
+
+            <main class="dashboard-content single-column">
+                <div class="glass-panel full-width tasks-list-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-clipboard-list"></i> My Assignments</h3>
+                        <div class="stats-pill">
+                            <span id="member-pending-count">0</span> Pending
+                        </div>
+                    </div>
+
+                    <div class="tasks-grid" id="member-tasks-container">
+                        <!-- Cards rendered here via JS -->
+                    </div>
+
+                    <div id="no-tasks-member" class="empty-state hidden">
+                        <i class="fa-solid fa-mug-hot"></i>
+                        <p>You have no pending tasks. Great job!</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Modular v9) - Placeholders for config later -->
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
