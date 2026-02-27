@@ -70,6 +70,15 @@
                     <span>Login</span>
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
+
+                <div class="auth-divider">
+                    <span>OR</span>
+                </div>
+
+                <button type="button" class="btn btn-google btn-block" id="google-signin-btn">
+                    <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" alt="Google Logo">
+                    <span>Sign in with Google</span>
+                </button>
             </form>
 
             <div class="auth-toggle">
@@ -173,6 +182,7 @@
 
         <!-- Member Dashboard View -->
         <div id="member-dashboard" class="view hidden">
+            <!-- (Member Dashboard Content Omitted For Space in Replacement, Keeping Unchanged) -->
             <nav class="navbar glass-panel">
                 <div class="nav-brand">
                     <i class="fa-solid fa-microchip"></i>
@@ -205,6 +215,32 @@
                     </div>
                 </div>
             </main>
+        </div>
+
+        <!-- Role Selection Modal (For First Time Google Sign-In) -->
+        <div id="role-modal" class="modal hidden">
+            <div class="modal-content glass-panel">
+                <h3 style="margin-bottom: 0.5rem;">Select Your Role</h3>
+                <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Please choose your role for this
+                    account. This cannot be changed later.</p>
+                <div class="role-selector" style="margin-bottom: 1.5rem;">
+                    <label class="radio-card">
+                        <input type="radio" name="google-role" value="coordinator" checked>
+                        <div class="card-content">
+                            <i class="fa-solid fa-user-tie"></i>
+                            <span>Coordinator</span>
+                        </div>
+                    </label>
+                    <label class="radio-card">
+                        <input type="radio" name="google-role" value="member">
+                        <div class="card-content">
+                            <i class="fa-solid fa-user"></i>
+                            <span>Member</span>
+                        </div>
+                    </label>
+                </div>
+                <button type="button" class="btn btn-primary btn-block" id="confirm-role-btn">Confirm Role</button>
+            </div>
         </div>
     </div>
 
