@@ -321,6 +321,46 @@ select:focus {
     box-shadow: 0 4px 15px rgba(46, 204, 166, 0.4);
 }
 
+/* Google Sign-in Button */
+.btn-google {
+    background-color: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    gap: 0.8rem;
+}
+
+.btn-google:hover {
+    background-color: #f8f9fa;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn-google img {
+    width: 20px;
+    height: 20px;
+}
+
+/* Auth Divider */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
 /* Auth Toggle */
 .auth-toggle {
     margin-top: 1.5rem;
@@ -600,4 +640,38 @@ select:focus {
     opacity: 0;
     pointer-events: none;
     transform: translate(-50%, -20px);
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    padding: 2.5rem;
+    width: 90%;
+    max-width: 450px;
+    text-align: center;
+    transform: translateY(0);
+    transition: transform 0.3s ease;
+}
+
+.modal.hidden .modal-content {
+    transform: translateY(-20px);
 }
