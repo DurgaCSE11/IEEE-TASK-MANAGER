@@ -42,6 +42,10 @@
                     <label for="name">Full Name</label>
                     <input type="text" id="name" placeholder="John Doe">
                 </div>
+                <div class="form-group" id="regno-group" style="display: none;">
+                    <label for="regno">Registration Number</label>
+                    <input type="text" id="regno" placeholder="e.g. 2102030012">
+                </div>
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" required placeholder="••••••••">
@@ -113,8 +117,10 @@
                                     placeholder="E.g. Setup event registration form">
                             </div>
                             <div class="form-group">
-                                <label for="task-assignee">Assign To (Email)</label>
-                                <input type="email" id="task-assignee" required placeholder="member@ieee.org">
+                                <label for="task-assignee">Assign To</label>
+                                <select id="task-assignee" required>
+                                    <option value="" disabled selected>Select a member...</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label for="task-deadline">Deadline</label>
@@ -220,9 +226,16 @@
         <!-- Role Selection Modal (For First Time Google Sign-In) -->
         <div id="role-modal" class="modal hidden">
             <div class="modal-content glass-panel">
-                <h3 style="margin-bottom: 0.5rem;">Select Your Role</h3>
-                <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Please choose your role for this
-                    account. This cannot be changed later.</p>
+                <h3 style="margin-bottom: 0.5rem;">Complete Your Profile</h3>
+                <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem;">Please provide your Registration
+                    Number and Role.</p>
+                <div class="form-group">
+                    <label for="google-regno">Registration Number <span class="text-danger">*</span></label>
+                    <input type="text" id="google-regno" required placeholder="e.g. 2102030012">
+                </div>
+                <label
+                    style="margin-bottom: 0.5rem; display: block; font-weight: 500; font-size: 0.9rem; color: var(--text-color);">Role
+                    <span class="text-danger">*</span></label>
                 <div class="role-selector" style="margin-bottom: 1.5rem;">
                     <label class="radio-card">
                         <input type="radio" name="google-role" value="coordinator" checked>
