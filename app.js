@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
     getAuth,
@@ -158,8 +159,10 @@ function toggleAuthMode(e) {
         submitBtn.innerHTML = '<span>Register</span><i class="fa-solid fa-user-plus"></i>';
         toggleText.innerHTML = 'Already have an account? <a href="#" id="toggle-auth-mode">Login here</a>';
         nameGroup.style.display = 'flex';
+        document.getElementById('regno-group').style.display = 'flex';
         roleGroup.style.display = 'grid';
         document.getElementById('name').setAttribute('required', 'true');
+        document.getElementById('regno').setAttribute('required', 'true');
     } else {
         currentAuthMode = 'login';
         title.textContent = 'IEEE Task Tracker';
@@ -167,8 +170,10 @@ function toggleAuthMode(e) {
         submitBtn.innerHTML = '<span>Login</span><i class="fa-solid fa-arrow-right"></i>';
         toggleText.innerHTML = 'Don\'t have an account? <a href="#" id="toggle-auth-mode">Register here</a>';
         nameGroup.style.display = 'none';
+        document.getElementById('regno-group').style.display = 'none';
         roleGroup.style.display = 'none';
         document.getElementById('name').removeAttribute('required');
+        document.getElementById('regno').removeAttribute('required');
     }
 
     document.getElementById('toggle-auth-mode').addEventListener('click', toggleAuthMode);
@@ -232,8 +237,13 @@ async function handleConfirmGoogleRole(e) {
     if (!pendingGoogleUser) return;
 
     const roleInput = document.querySelector('input[name="google-role"]:checked');
+    const regNoInput = document.getElementById('google-regno').value.trim();
+
     if (!roleInput) {
         return showToast("Please select a role", "error");
+    }
+    if (!regNoInput) {
+        return showToast("Please enter your Registration Number", "error");
     }
 
     const role = roleInput.value;
@@ -246,6 +256,7 @@ async function handleConfirmGoogleRole(e) {
         await setDoc(doc(db, "users", pendingGoogleUser.uid), {
             email: pendingGoogleUser.email,
             name: pendingGoogleUser.name,
+            regNo: regNoInput,
             role: role,
             createdAt: serverTimestamp()
         });
@@ -285,18 +296,21 @@ async function handleAuthSubmit(e) {
     try {
         if (currentAuthMode === 'register') {
             const name = document.getElementById('name').value.trim();
+            const regNo = document.getElementById('regno').value.trim();
             const role = document.querySelector('input[name="role"]:checked').value;
 
             if (!name) throw new Error("Please enter your name");
+            if (!regNo) throw new Error("Please enter your Registration Number");
 
             // Register user in Firebase Auth
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
 
-            // Save additional user info (role, name) to Firestore 'users' collection
+            // Save additional user info (role, name, regNo) to Firestore 'users' collection
             await setDoc(doc(db, "users", user.uid), {
                 email: user.email,
                 name: name,
+                regNo: regNo,
                 role: role,
                 createdAt: serverTimestamp()
             });
@@ -346,6 +360,7 @@ function loginUser(user) {
         document.getElementById('coord-user-email').textContent = user.name || user.email;
         switchView('coordinator');
         loadAllTasks();
+        loadMembersForDropdown();
     } else {
         document.getElementById('member-user-email').textContent = user.name || user.email;
         switchView('member');
@@ -373,11 +388,45 @@ async function handleLogout() {
 // ==========================================
 // 5. DATABASE OPERATIONS
 // ==========================================
+async function loadMembersForDropdown() {
+    const assigneeSelect = document.getElementById('task-assignee');
+    try {
+        const q = query(collection(db, "users"), where("role", "==", "member"));
+
+        // Use getDocs directly or onSnapshot. For simpler workflow, we can use onSnapshot 
+        // to keep the list updated, but for dropdown we can also do a one-off fetch.
+        // Doing onSnapshot so it stays live when new members join.
+        onSnapshot(q, (snapshot) => {
+            // Keep the first disabled generic option
+            assigneeSelect.innerHTML = '<option value="" disabled selected>Select a member...</option>';
+
+            const members = [];
+            snapshot.forEach((doc) => {
+                members.push({ id: doc.id, ...doc.data() });
+            });
+
+            // Sort by name for ease of use
+            members.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            members.forEach(member => {
+                const opt = document.createElement('option');
+                opt.value = member.email; // We keep email as the identifier for assignments
+                opt.textContent = `${member.name} (${member.regNo || 'No Reg No'})`;
+                assigneeSelect.appendChild(opt);
+            });
+        }, (error) => {
+            console.error("Error loading members for dropdown: ", error);
+        });
+    } catch (err) {
+        console.error("Error setting up member dropdown listener:", err);
+    }
+}
+
 async function createTask(e) {
     e.preventDefault();
 
     const title = document.getElementById('task-title').value.trim();
-    const assignee = document.getElementById('task-assignee').value.trim().toLowerCase();
+    const assignee = document.getElementById('task-assignee').value;
     const deadline = document.getElementById('task-deadline').value;
 
     if (!title || !assignee || !deadline) {
